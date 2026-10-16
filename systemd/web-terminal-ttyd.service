@@ -1,0 +1,15 @@
+# ttyd, reachable only through a private socket file. The gatekeeper is the only way in.
+[Unit]
+Description=web-terminal: ttyd on a private socket
+
+[Service]
+# %t is /run/user/<your id>; systemd creates this folder (only you can open it) and removes it on stop.
+RuntimeDirectory=web-terminal
+RuntimeDirectoryMode=0700
+# Each browser session runs ssh to this computer, so your Linux password is checked by the SSH server.
+ExecStart=/usr/bin/ttyd --writable --check-origin --interface %t/web-terminal/ttyd.sock ssh -o StrictHostKeyChecking=accept-new %u@localhost
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

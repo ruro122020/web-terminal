@@ -1,0 +1,22 @@
+# The gatekeeper: listens on the Tailscale address and lets only the iPhone through.
+[Unit]
+Description=web-terminal: iPhone-only gatekeeper
+Wants=web-terminal-ttyd.service
+After=web-terminal-ttyd.service
+# At boot the Tailscale address may not exist yet, so keep retrying instead of giving up.
+StartLimitIntervalSec=0
+
+[Service]
+WorkingDirectory=%h/Development/web-terminal
+# Run whatever Node version nvm's "default" alias points to, so installing updates or
+# switching versions with `nvm alias default <version>` needs no change here.
+Environment=NODE_VERSION=default
+# The Bitwarden access token lives outside the repo, in a file only you can read.
+EnvironmentFile=%h/.config/web-terminal/bws.env
+# bws fetches the addresses from Bitwarden Secrets Manager and hands them to node as environment variables.
+ExecStart=%h/.local/bin/bws run -- %h/.nvm/nvm-exec node server.mjs
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
