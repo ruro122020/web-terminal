@@ -7,9 +7,21 @@ Description=web-terminal: ttyd on a private socket
 RuntimeDirectory=web-terminal
 RuntimeDirectoryMode=0700
 # Each browser session runs ssh to this computer, so your Linux password is checked by the SSH server.
-ExecStart=/usr/bin/ttyd --writable --check-origin --interface %t/web-terminal/ttyd.sock ssh -o StrictHostKeyChecking=accept-new %u@localhost
+# --max-clients caps how many terminal sessions can be open at once.
+ExecStart=/usr/bin/ttyd --writable --check-origin --max-clients 3 --interface %t/web-terminal/ttyd.sock ssh -o StrictHostKeyChecking=accept-new %u@localhost
 Restart=on-failure
 RestartSec=2
+
+# Sandboxing: the shell you use runs under the SSH server, not under ttyd,
+# so these limits do not restrict what you can do in the terminal.
+NoNewPrivileges=yes
+LockPersonality=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+UMask=0077
+TasksMax=32
+MemoryMax=256M
 
 [Install]
 WantedBy=default.target
