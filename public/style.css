@@ -1,17 +1,23 @@
 :root {
+  color-scheme: dark;
   --background: #000;
   --foreground: #e6e6e6;
-  --accent: #3b82f6;
+  --accent: #2563eb; /* white text on it passes WCAG AA contrast */
+  --bar: #111;
   --key: #2a2a2e;
+  --key-edge: #3a3a40;
   --key-pressed: #44444a;
 }
 
 html, body {
   margin: 0;
-  height: 100%;
   background: var(--background);
   color: var(--foreground);
   overflow: hidden;
+}
+
+html {
+  height: 100%;
 }
 
 body {
@@ -19,31 +25,58 @@ body {
   flex-direction: column;
   /* app.js sets --app-height to the area the iPhone keyboard leaves visible, so the key bar sits on top of it */
   height: var(--app-height, 100dvh);
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  padding-top: env(safe-area-inset-top);
   box-sizing: border-box;
 }
 
 #terminal {
   flex: 1;
   min-height: 0;
+  padding: 0 env(safe-area-inset-right) 0 env(safe-area-inset-left);
+  /* app.js handles one-finger scrolling; this also stops pinch and double-tap zoom on the terminal */
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#connection {
+  padding: 0 max(8px, env(safe-area-inset-right)) 0 max(8px, env(safe-area-inset-left));
+  background: var(--bar);
+}
+
+#reconnect {
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 14px;
+  font: 600 16px system-ui, sans-serif;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 10px;
 }
 
 #keys {
   display: grid;
   grid-template-columns: repeat(8, 1fr);
-  gap: 4px;
-  padding: 4px 4px max(4px, env(safe-area-inset-bottom));
-  background: #111;
+  gap: 6px;
+  /* The bottom inset keeps keys clear of the home indicator; with the keyboard open it is covered anyway */
+  padding: 4px max(4px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(4px, env(safe-area-inset-left));
+  background: var(--bar);
+}
+
+.keyboard-open #keys {
+  padding-bottom: 4px;
 }
 
 #keys button {
   height: 44px;
+  padding: 0;
   font: 500 15px system-ui, sans-serif;
   color: var(--foreground);
   background: var(--key);
-  border: 0;
+  border: 1px solid var(--key-edge);
   border-radius: 6px;
   touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
   -webkit-user-select: none;
   user-select: none;
 }
@@ -54,16 +87,10 @@ body {
 
 #keys button[aria-pressed="true"] {
   background: var(--accent);
+  border-color: var(--accent);
   color: #fff;
 }
 
-#reconnect {
-  position: fixed;
-  inset: auto 16px calc(16px + env(safe-area-inset-bottom)) 16px;
-  padding: 14px;
-  font: 600 16px system-ui, sans-serif;
-  color: #fff;
-  background: var(--accent);
-  border: 0;
-  border-radius: 10px;
+.disconnected #keys button {
+  opacity: 0.4;
 }

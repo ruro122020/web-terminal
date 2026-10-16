@@ -6,8 +6,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="Terminal">
+  <!-- Opened from the Home Screen, the page runs under the status bar, which shows white text -->
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="theme-color" content="#000000">
+  <meta name="color-scheme" content="dark">
   <title>Terminal</title>
+  <link rel="manifest" href="/manifest.webmanifest">
   <link rel="apple-touch-icon" href="/apple-touch-icon.png">
   <link rel="stylesheet" href="/vendor/xterm.css">
   <link rel="stylesheet" href="/style.css">
@@ -15,16 +19,18 @@
 </head>
 <body>
   <main id="terminal"></main>
-  <nav id="keys" aria-label="Extra keys">
+  <div id="connection" role="status">
+    <button id="reconnect" type="button" hidden>Disconnected. Tap to reconnect.</button>
+  </div>
+  <div id="keys" role="toolbar" aria-label="Extra keys">
     <button type="button" data-key="escape">Esc</button>
     <button type="button" data-key="tab">Tab</button>
-    <button type="button" data-key="shiftTab">⇧Tab</button>
+    <button type="button" data-key="shiftTab" aria-label="Shift Tab">⇧Tab</button>
     <button type="button" data-key="ctrl" aria-pressed="false">Ctrl</button>
     <button type="button" data-key="up" aria-label="Up arrow">↑</button>
     <button type="button" data-key="down" aria-label="Down arrow">↓</button>
     <button type="button" data-key="left" aria-label="Left arrow">←</button>
     <button type="button" data-key="right" aria-label="Right arrow">→</button>
-  </nav>
-  <button id="reconnect" type="button" hidden>Disconnected. Tap to reconnect.</button>
+  </div>
 </body>
 </html>
