@@ -11,7 +11,7 @@ iPhone browser --> Tailscale --> gatekeeper (server.mjs) --> private socket file
 ```
 
 - **Tailscale** connects your iPhone and the computer from anywhere, and encrypts everything between them.
-- **The gatekeeper** (`server.mjs`) is the only program listening on the network. It listens on the computer's Tailscale address, refuses every device except the allowed iPhone, serves the terminal page, and forwards the terminal connection to ttyd.
+- **The gatekeeper** (`server.mjs`) is the only program listening on the network. It listens on the computer's Tailscale address, drops every device except the allowed iPhone without replying, serves the terminal page, and forwards the terminal connection to ttyd.
 - **ttyd** runs the terminal. It listens on a socket file (a connection point on disk that only your user can open) instead of the network, so the gatekeeper is the only way to reach it.
 - **ssh** runs inside ttyd and logs in to the same computer, so every session asks for your Linux password.
 - **Bitwarden Secrets Manager** holds the two private addresses the gatekeeper needs. They are never written in this repo; `bws run` hands them to the gatekeeper when it starts.
@@ -50,6 +50,16 @@ The Ubuntu and Debian ttyd package also starts its own ttyd as root, offering a 
 ```sh
 sudo systemctl disable --now ttyd
 ```
+
+The SSH server listens on every network the computer is on by default, so any device on your home Wi-Fi could try passwords against it and skip the gatekeeper entirely. This project only needs it on the computer itself, so limit it to that:
+
+```sh
+printf 'ListenAddress 127.0.0.1\nListenAddress ::1\n' | sudo tee /etc/ssh/sshd_config.d/10-localhost-only.conf
+sudo systemctl daemon-reload
+sudo systemctl restart ssh.socket
+```
+
+On Ubuntu 22.10 and later the SSH server is started on demand through `ssh.socket`; on other systems use `sudo systemctl restart ssh` instead. Check the result with `ss -ltn | grep ':22 '`: it should list only `127.0.0.1:22` and `[::1]:22`. This stops other computers from using this SSH server. If you use Tailscale SSH, that is a separate program and keeps working.
 
 ### 2. Install Node.js with nvm
 
@@ -191,18 +201,70 @@ journalctl --user -u web-terminal -f        # gatekeeper, including refused devi
 journalctl --user -u web-terminal-ttyd -f   # ttyd
 ```
 
+## Tests
+
+The tests use only loopback addresses (`127.0.0.1`) and never need your Bitwarden secrets.
+
+### Gatekeeper and key tests
+
+```sh
+npm test
+```
+
+These start real copies of the gatekeeper with a stand-in for ttyd, and connect from two loopback addresses (`127.0.0.1` allowed, `127.0.0.2` not) to play the iPhone and another device. They check that:
+
+- the gatekeeper stops with exit code 78 when a setting is missing or invalid, and listens only on `LISTEN_HOST`;
+- devices that are not allowed are dropped without a reply;
+- requests using another site's name are refused (the defense against DNS rebinding);
+- only the page files are served, each with its exact contents and security headers;
+- the terminal connection carries data both ways, closes on both sides, and forwards only the headers ttyd needs;
+- malformed requests, abrupt disconnects and a stopped ttyd never stop the gatekeeper, and connections are limited.
+
+They also check the exact bytes each key bar key sends, including Ctrl with letters from other alphabets, and that the two service files agree with each other and with the gatekeeper: the socket path, the Bitwarden and Node launchers, and the exit code that stops restarts.
+
+### System tests
+
+```sh
+npm run test:system
+```
+
+These run the exact ttyd command from `systemd/web-terminal-ttyd.service` behind the gatekeeper and check that a session reaches this computer's SSH password prompt. They stop at the prompt and never type a password. They also run systemd's own checks on both service files. They need ttyd and the SSH server running (step 1).
+
+### Browser tests
+
+These open the real page in a phone-sized touch browser, with a real ttyd behind it. They check:
+
+- finger scrolling, its glide, and swiping inside full-screen programs and programs that use the mouse (like Claude Code's full-screen mode);
+- that tapping a bar key keeps the keyboard open, the bytes every key sends in both arrow modes, holding an arrow, and Ctrl;
+- that the program is told the terminal's size, including after turning the phone sideways, and that the key bar stays at the bottom of the visible area;
+- disconnecting, reconnecting with the button, and reconnecting by itself when you come back to the page.
+
+They need ttyd installed (step 1) and Playwright's headless Chrome, downloaded once:
+
+```sh
+npx playwright install chromium-headless-shell
+npm run test:browser
+```
+
+On Linux versions newer than Playwright officially supports (Ubuntu 26.04, for example), the download needs one extra setting: `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 npx playwright install chromium-headless-shell`. Running the tests does not need it.
+
+These tests run in Chrome, not the iPhone's own browser engine (WebKit), so a change to touch or keyboard behavior still needs a check on the phone.
+
 ## Troubleshooting
 
 | Symptom | Cause and fix |
 |---|---|
-| Log says `Missing LISTEN_HOST` or `Missing ALLOWED_ADDRESSES` | The secret is missing from the Bitwarden project, its name is misspelled, or the machine account lacks **Can read** access to the project. |
-| The page never loads on the iPhone | Tailscale is off on the phone, or `ALLOWED_ADDRESSES` does not match the phone's current Tailscale address. Check the log for `Refused <address>`. |
-| `Forbidden` | The device you are using is not in `ALLOWED_ADDRESSES`. This is the gatekeeper working as intended. |
+| The service stopped and the log says `Missing LISTEN_HOST`, `Missing ALLOWED_ADDRESSES` or `must be` | A setting is missing or not an IP address: the secret is missing from the Bitwarden project, its name is misspelled, or the machine account lacks **Can read** access to the project. The gatekeeper exits with code 78 and systemd does not retry, because retrying cannot fix a setting. Fix it in Bitwarden, then run `systemctl --user restart web-terminal`. |
+| The page never loads on the iPhone, or the connection resets | Tailscale is off on the phone, or `ALLOWED_ADDRESSES` does not match the phone's current Tailscale address. Devices that are not allowed are dropped without a reply, so the browser only says it cannot connect. Check the log for `Refused <address>`. |
+| `Misdirected request` | The page was opened by a name instead of `http://<COMPUTER_TAILSCALE_IP>:7681` (for example, the computer's Tailscale name). The gatekeeper only answers requests addressed to that exact address and port, which is how it refuses other websites. Use the address. |
 | Gatekeeper keeps restarting after boot | Tailscale or the internet was not up yet. It retries every 5 seconds until both are available, because it needs the Tailscale address and Bitwarden at startup. |
 | The password prompt never appears | The SSH server is not running: `systemctl status ssh`. |
 
 ## Security notes
 
 - The traffic is encrypted by Tailscale end to end, so plain `http://` is not readable by anyone between the phone and the computer. Tailscale can also issue HTTPS certificates, but every certificate is recorded in public logs, which makes the computer's Tailscale name publicly visible. HTTPS would mostly matter for browser features that require it, such as reading the clipboard.
-- The terminal connection only accepts requests that state which page they came from (the `Origin` header), which stops other websites from opening a terminal in the background.
+- A website you open on the iPhone could try to make the browser connect here under the website's own name (DNS rebinding: the site's name is switched to point at this computer). The gatekeeper refuses any request not addressed to `<COMPUTER_TAILSCALE_IP>:7681`, and refuses terminal connections whose `Origin` header (the page they came from) is not this page. ttyd's own origin check cannot stop this, because it only compares those two headers with each other.
+- Other websites cannot show this page inside a hidden frame (`frame-ancestors 'none'`), which stops them from tricking you into typing into it.
+- At most 20 connections reach the gatekeeper and 3 terminal sessions run in ttyd at once, and both services run with systemd sandboxing options.
+- The gatekeeper only guards its own port. Step 1 limits the SSH server to the computer itself so it is not a second way in. For a network-level layer as well, Tailscale access rules (ACLs, set in the Tailscale admin console) can allow only the iPhone to reach port 7681.
 - Secrets never go in this repo. Keep them in Bitwarden Secrets Manager or any secret manager. 
