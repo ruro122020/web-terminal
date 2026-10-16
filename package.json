@@ -3,10 +3,16 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs"
+    "start": "node server.mjs",
+    "test": "node --test --test-timeout=20000 test/*.test.mjs",
+    "test:browser": "node --test --test-timeout=120000 test/browser/*.test.mjs",
+    "test:system": "node --test --test-timeout=60000 test/system/*.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",
     "@xterm/xterm": "6.0.0"
+  },
+  "devDependencies": {
+    "playwright": "1.56.1"
   }
 }
