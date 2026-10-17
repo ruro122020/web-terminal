@@ -1,4 +1,6 @@
 # The gatekeeper: listens on the Tailscale address and lets only the iPhone through.
+# systemd/install.sh in the project folder fills the project's path into this file and installs the
+# result in ~/.config/systemd/user. Edit the copy in the project and run install.sh again.
 [Unit]
 Description=web-terminal: iPhone-only gatekeeper
 Wants=web-terminal-ttyd.service
@@ -7,14 +9,14 @@ After=web-terminal-ttyd.service
 StartLimitIntervalSec=0
 
 [Service]
-WorkingDirectory=%h/Development/web-terminal
+WorkingDirectory=@PROJECT_DIR@
 # Must match the socket ttyd creates in web-terminal-ttyd.service.
 Environment=TTYD_SOCKET=%t/web-terminal/ttyd.sock
 # The Bitwarden access token lives outside the repo, in a file only you can read.
 EnvironmentFile=%h/.config/web-terminal/bws.env
 # bws fetches the addresses from Bitwarden Secrets Manager and hands them to the gatekeeper as
 # environment variables. The gatekeeper is built with `npm run build` (see the README).
-ExecStart=%h/.local/bin/bws run -- %h/Development/web-terminal/gatekeeper/target/release/gatekeeper
+ExecStart=%h/.local/bin/bws run -- @PROJECT_DIR@/gatekeeper/target/release/gatekeeper
 Restart=always
 RestartSec=5
 # Exit code 78 means a setting is missing or wrong. Retrying cannot fix that, so stop

@@ -11,7 +11,7 @@ import { readFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { REPO_ROOT, THIS_MACHINE, removeTempDirs, startGatekeeper, tempSocketPath, waitForFile } from '../helpers.mjs';
+import { REPO_ROOT, THIS_MACHINE, removeTempDirs, renderUnits, startGatekeeper, tempSocketPath, waitForFile } from '../helpers.mjs';
 
 after(removeTempDirs);
 
@@ -26,8 +26,9 @@ async function ttydCommand(socketPath) {
   return { program, args };
 }
 
-test('both service files pass systemd\'s own checks', async () => {
-  const units = ['web-terminal.service', 'web-terminal-ttyd.service'].map((name) => join(REPO_ROOT, 'systemd', name));
+test('both service files pass systemd\'s own checks once the project folder is filled in', async () => {
+  const dir = await renderUnits();
+  const units = ['web-terminal.service', 'web-terminal-ttyd.service'].map((name) => join(dir, name));
   const { stderr } = await promisify(execFile)('systemd-analyze', ['--user', 'verify', ...units]);
   const problems = stderr.split('\n').filter((line) => line.includes('web-terminal'));
   assert.deepEqual(problems, []);

@@ -54,8 +54,8 @@ test('the gatekeeper gets its secrets from Bitwarden through bws run', () => {
 });
 
 test('the gatekeeper runs as the compiled program from this repo, without Node', () => {
-  assert.match(gatekeeper.ExecStart[0], /-- %h\/Development\/web-terminal\/gatekeeper\/target\/release\/gatekeeper$/);
-  assert.equal(gatekeeper.WorkingDirectory[0], '%h/Development/web-terminal', 'it serves the page from its working directory');
+  assert.match(gatekeeper.ExecStart[0], /-- @PROJECT_DIR@\/gatekeeper\/target\/release\/gatekeeper$/);
+  assert.equal(gatekeeper.WorkingDirectory[0], '@PROJECT_DIR@', 'it serves the page from its working directory; install.sh fills the folder in');
   assert.doesNotMatch(gatekeeper.ExecStart[0], /node|nvm/);
 });
 

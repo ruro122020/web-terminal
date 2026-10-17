@@ -1,11 +1,12 @@
 // Shared by the service, system and browser tests. Uses only loopback addresses, never real ones.
 // The gatekeeper's own tests are in Rust, in gatekeeper/tests.
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { access, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 
 export const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 export const THIS_MACHINE = '127.0.0.1';
@@ -15,10 +16,22 @@ const GATEKEEPER = join(REPO_ROOT, 'gatekeeper', 'target', 'release', 'gatekeepe
 
 const tempDirs = [];
 
-export async function tempSocketPath() {
+export async function tempDir() {
   const dir = await mkdtemp(join(tmpdir(), 'web-terminal-test-'));
   tempDirs.push(dir);
-  return join(dir, 'ttyd.sock');
+  return dir;
+}
+
+export async function tempSocketPath() {
+  return join(await tempDir(), 'ttyd.sock');
+}
+
+/** Runs systemd/install.sh in its render-only mode and returns the folder holding the filled-in unit files. */
+export async function renderUnits() {
+  const dir = await tempDir();
+  // Run it away from the repo, so a script that took the current folder for the project would fail here.
+  await promisify(execFile)(join(REPO_ROOT, 'systemd', 'install.sh'), ['--render-to', dir], { cwd: dir });
+  return dir;
 }
 
 export function removeTempDirs() {

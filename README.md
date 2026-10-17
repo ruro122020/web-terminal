@@ -68,20 +68,17 @@ On Ubuntu 22.10 and later the SSH server is started on demand through `ssh.socke
 
 ### 3. Get the code
 
-The service expects the project at `~/Development/web-terminal`:
+Clone the project anywhere you like, as long as the path has no spaces, `%`, `$`, quotes or backslashes (systemd gives those a meaning of their own); step 7 installs the services for wherever it is:
 
 ```sh
-mkdir -p ~/Development
-git clone <REPO_URL> ~/Development/web-terminal
-cd ~/Development/web-terminal
+git clone <REPO_URL> web-terminal
+cd web-terminal
 npm ci
 npm run build
 ```
 
 - `npm ci` installs xterm.js at the exact versions in `package-lock.json`. The page loads it from the computer, never from the internet.
 - `npm run build` compiles the gatekeeper to `gatekeeper/target/release/gatekeeper`, which the service runs.
-
-If you put the project somewhere else, change the `WorkingDirectory` and `ExecStart` lines in `systemd/web-terminal.service` to match.
 
 ### 4. Install the Bitwarden Secrets Manager CLI (`bws`)
 
@@ -131,16 +128,16 @@ Check that Bitwarden delivers both secrets, without printing their values:
 (set -a; . ~/.config/web-terminal/bws.env; set +a; bws run -- 'for n in LISTEN_HOST ALLOWED_ADDRESSES; do eval v=\$$n; [ -n "$v" ] && echo "$n: present" || echo "$n: MISSING"; done')
 ```
 
-### 7. Start the services
+### 7. Install and start the services
+
+From the project folder:
 
 ```sh
-cd ~/Development/web-terminal
-systemctl --user link "$PWD/systemd/web-terminal-ttyd.service" "$PWD/systemd/web-terminal.service"
-systemctl --user enable --now web-terminal-ttyd.service web-terminal.service
+systemd/install.sh
 loginctl enable-linger "$USER"
 ```
 
-`enable-linger` keeps your services running when you are logged out, and starts them at boot before anyone logs in.
+`install.sh` writes the two service files to `~/.config/systemd/user/` with this folder's path filled in, then enables and starts the services. Run it from a terminal on the computer or a plain SSH session, not from inside the web terminal: it restarts ttyd, which ends every web terminal session. `enable-linger` keeps your services running when you are logged out, and starts them at boot before anyone logs in.
 
 Check that it is running:
 
@@ -175,6 +172,14 @@ npm run build
 systemctl --user restart web-terminal
 ```
 
+### Moving the project or changing a service file
+
+The installed services carry the project folder's path and a copy of each file in `systemd/`. After moving the folder or editing one of those files, run the install command again from the project folder (not from inside the web terminal, see step 7):
+
+```sh
+systemd/install.sh
+```
+
 ### Allowing a different iPhone
 
 Change the `ALLOWED_ADDRESSES` secret in Bitwarden, then restart the gatekeeper:
@@ -206,13 +211,13 @@ npm run test:gatekeeper
 
 These are written in Rust, in `gatekeeper/tests`. They start real copies of the gatekeeper with a stand-in for ttyd, and connect from two loopback addresses (`127.0.0.1` allowed, `127.0.0.2` not) to play the iPhone and another device. They check that:
 
-- the gatekeeper stops with exit code 78 when a setting is missing or invalid, and listens only on `LISTEN_HOST`;
-- devices that are not allowed are dropped without a reply;
-- requests using another site's name are refused (the defense against DNS rebinding);
-- only the page files are served, each with its exact contents and security headers;
-- the terminal connection carries data both ways, closes on both sides, and forwards only the headers ttyd needs;
-- the browser gets a complete WebSocket handshake it will accept, ttyd's refusals stay refusals, and data sent together with a handshake is not lost;
-- malformed requests, abrupt disconnects and a stopped ttyd never stop the gatekeeper, and connections are limited.
+- the gatekeeper stops with exit code 78 when a setting is missing or invalid, and listens only on `LISTEN_HOST`
+- devices that are not allowed are dropped without a reply
+- requests using another site's name are refused (the defense against DNS rebinding)
+- only the page files are served, each with its exact contents and security headers
+- the terminal connection carries data both ways, closes on both sides, and forwards only the headers ttyd needs
+- the browser gets a complete WebSocket handshake it will accept, ttyd's refusals stay refusals, and data sent together with a handshake is not lost
+- malformed requests, abrupt disconnects and a stopped ttyd never stop the gatekeeper, and connections are limited
 
 ### Key and service tests
 
@@ -220,7 +225,7 @@ These are written in Rust, in `gatekeeper/tests`. They start real copies of the 
 npm test
 ```
 
-These check the exact bytes each key bar key sends, including Ctrl with letters from other alphabets, and that the two service files agree with each other and with the gatekeeper: the socket path, the Bitwarden launcher, the compiled gatekeeper, and the exit code that stops restarts.
+These check the exact bytes each key bar key sends, including Ctrl with letters from other alphabets, and that the two service files agree with each other and with the gatekeeper: the socket path, the Bitwarden launcher, the compiled gatekeeper, and the exit code that stops restarts. They also check that `systemd/install.sh` fills the project folder into the service files.
 
 ### System tests
 
@@ -228,15 +233,15 @@ These check the exact bytes each key bar key sends, including Ctrl with letters 
 npm run test:system
 ```
 
-These run the exact ttyd command from `systemd/web-terminal-ttyd.service` behind the gatekeeper and check that a session reaches this computer's SSH password prompt. They stop at the prompt and never type a password. They also run systemd's own checks on both service files. They need ttyd and the SSH server running (step 1).
+These run the exact ttyd command from `systemd/web-terminal-ttyd.service` behind the gatekeeper and check that a session reaches this computer's SSH password prompt. They stop at the prompt and never type a password. They also run systemd's own checks on both service files as `systemd/install.sh` writes them. They need ttyd and the SSH server running (step 1).
 
 ### Browser tests
 
 These open the real page in a phone-sized touch browser, with a real ttyd behind it. They check:
 
-- finger scrolling, its glide, and swiping inside full-screen programs and programs that use the mouse (like Claude Code's full-screen mode);
-- that tapping a bar key keeps the keyboard open, the bytes every key sends in both arrow modes, holding an arrow, and Ctrl;
-- that the program is told the terminal's size, including after turning the phone sideways, and that the key bar stays at the bottom of the visible area;
+- finger scrolling, its glide, and swiping inside full-screen programs and programs that use the mouse (like Claude Code's full-screen mode)
+- that tapping a bar key keeps the keyboard open, the bytes every key sends in both arrow modes, holding an arrow, and Ctrl
+- that the program is told the terminal's size, including after turning the phone sideways, and that the key bar stays at the bottom of the visible area
 - disconnecting, reconnecting with the button, and reconnecting by itself when you come back to the page.
 
 They need ttyd installed (step 1) and Playwright's headless Chrome, downloaded once:
