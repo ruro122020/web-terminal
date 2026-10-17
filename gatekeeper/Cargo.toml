@@ -1,0 +1,26 @@
+[package]
+name = "gatekeeper"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+description = "Lets only the allowed iPhone reach the web terminal, and forwards its terminal connection to ttyd."
+publish = false
+
+[dependencies]
+bytes = "1.12.1"
+http-body-util = "0.1.5"
+httparse = "1.10.1"
+hyper = { version = "1.12.0", features = ["server", "http1"] }
+hyper-util = { version = "0.1.21", features = ["tokio"] }
+tokio = { version = "1.53.3", features = ["fs", "io-util", "macros", "net", "rt", "sync", "time"] }
+
+[dev-dependencies]
+socket2 = "0.6.5"
+tempfile = "3.27.0"
+
+[lints.rust]
+unsafe_code = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
