@@ -3,10 +3,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "start": "node server.mjs",
+    "build": "cargo build --release --manifest-path gatekeeper/Cargo.toml",
     "test": "node --test --test-timeout=20000 test/*.test.mjs",
-    "test:browser": "node --test --test-timeout=120000 test/browser/*.test.mjs",
-    "test:system": "node --test --test-timeout=60000 test/system/*.test.mjs"
+    "test:gatekeeper": "cargo test --manifest-path gatekeeper/Cargo.toml",
+    "test:system": "npm run build && node --test --test-timeout=60000 test/system/*.test.mjs",
+    "test:browser": "npm run build && node --test --test-timeout=120000 test/browser/*.test.mjs"
   },
   "dependencies": {
     "@xterm/addon-fit": "0.11.0",

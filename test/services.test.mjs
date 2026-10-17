@@ -53,15 +53,15 @@ test('the gatekeeper gets its secrets from Bitwarden through bws run', () => {
   assert.match(gatekeeper.EnvironmentFile[0], /^%h\/\.config\/web-terminal\/bws\.env$/, 'the token file is outside the repo');
 });
 
-test('the gatekeeper runs the Node version nvm calls default, so Node updates need no change', () => {
-  assert.match(gatekeeper.ExecStart[0], /%h\/\.nvm\/nvm-exec node server\.mjs$/);
-  assert.equal(environment(gatekeeper).NODE_VERSION, 'default');
-  assert.doesNotMatch(gatekeeper.ExecStart[0], /versions\/node\/v\d/, 'no fixed Node version path');
+test('the gatekeeper runs as the compiled program from this repo, without Node', () => {
+  assert.match(gatekeeper.ExecStart[0], /-- %h\/Development\/web-terminal\/gatekeeper\/target\/release\/gatekeeper$/);
+  assert.equal(gatekeeper.WorkingDirectory[0], '%h/Development/web-terminal', 'it serves the page from its working directory');
+  assert.doesNotMatch(gatekeeper.ExecStart[0], /node|nvm/);
 });
 
 test('a configuration error stops the gatekeeper instead of restarting it forever', async () => {
-  const server = await readFile(join(REPO_ROOT, 'server.mjs'), 'utf8');
-  const exitCode = server.match(/const EXIT_CONFIG_ERROR = (\d+);/)[1];
+  const source = await readFile(join(REPO_ROOT, 'gatekeeper', 'src', 'main.rs'), 'utf8');
+  const exitCode = source.match(/const EXIT_CONFIG_ERROR: u8 = (\d+);/)[1];
   assert.equal(gatekeeper.RestartPreventExitStatus[0], exitCode);
   assert.equal(gatekeeper.Restart[0], 'always', 'other failures, such as Tailscale not up yet, are retried');
 });
@@ -72,4 +72,5 @@ test('both services start at boot and run sandboxed', () => {
     assert.equal(unit.NoNewPrivileges[0], 'yes');
     assert.ok(unit.TasksMax && unit.MemoryMax, 'process and memory limits');
   }
+  assert.equal(gatekeeper.MemoryDenyWriteExecute[0], 'yes', 'possible now that no JavaScript engine runs in it');
 });

@@ -7,12 +7,11 @@
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile, spawn } from 'node:child_process';
-import { access, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { userInfo } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
-import { setTimeout as sleep } from 'node:timers/promises';
-import { REPO_ROOT, THIS_MACHINE, removeTempDirs, startGatekeeper, tempSocketPath } from '../helpers.mjs';
+import { REPO_ROOT, THIS_MACHINE, removeTempDirs, startGatekeeper, tempSocketPath, waitForFile } from '../helpers.mjs';
 
 after(removeTempDirs);
 
@@ -25,17 +24,6 @@ async function ttydCommand(socketPath) {
     .replaceAll('%u', userInfo().username)
     .split(/\s+/);
   return { program, args };
-}
-
-async function waitForFile(path) {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try {
-      return await access(path);
-    } catch {
-      await sleep(100);
-    }
-  }
-  throw new Error(`ttyd did not create ${path}`);
 }
 
 test('both service files pass systemd\'s own checks', async () => {

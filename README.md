@@ -7,11 +7,11 @@ Only one device can open it: the iPhone you allow. Everyone else is refused, inc
 ## How it works
 
 ```
-iPhone browser --> Tailscale --> gatekeeper (server.mjs) --> private socket file --> ttyd --> ssh to computer
+iPhone browser --> Tailscale --> gatekeeper (Rust) --> private socket file --> ttyd --> ssh to computer
 ```
 
 - **Tailscale** connects your iPhone and the computer from anywhere, and encrypts everything between them.
-- **The gatekeeper** (`server.mjs`) is the only program listening on the network. It listens on the computer's Tailscale address, drops every device except the allowed iPhone without replying, serves the terminal page, and forwards the terminal connection to ttyd.
+- **The gatekeeper** (`gatekeeper/`, a small Rust program built on the hyper HTTP library) is the only program listening on the network. It listens on the computer's Tailscale address, drops every device except the allowed iPhone without replying, serves the terminal page, and forwards the terminal connection to ttyd.
 - **ttyd** runs the terminal. It listens on a socket file (a connection point on disk that only your user can open) instead of the network, so the gatekeeper is the only way to reach it.
 - **ssh** runs inside ttyd and logs in to the same computer, so every session asks for your Linux password.
 - **Bitwarden Secrets Manager** holds the two private addresses the gatekeeper needs. They are never written in this repo; `bws run` hands them to the gatekeeper when it starts.
@@ -61,16 +61,10 @@ sudo systemctl restart ssh.socket
 
 On Ubuntu 22.10 and later the SSH server is started on demand through `ssh.socket`; on other systems use `sudo systemctl restart ssh` instead. Check the result with `ss -ltn | grep ':22 '`: it should list only `127.0.0.1:22` and `[::1]:22`. This stops other computers from using this SSH server. If you use Tailscale SSH, that is a separate program and keeps working.
 
-### 2. Install Node.js with nvm
+### 2. Install Rust and Node.js
 
-Install [nvm](https://github.com/nvm-sh/nvm), then:
-
-```sh
-nvm install 22
-nvm alias default 22
-```
-
-The service runs whichever version nvm's `default` alias points to, so Node updates need no change to this project. See [Updating Node.js](#updating-nodejs).
+- **Rust** builds the gatekeeper. Install it with [rustup](https://rustup.rs).
+- **Node.js and npm** download xterm.js (the terminal display the page uses) and run the tests. The running service does not use Node. Any current version works; [nvm](https://github.com/nvm-sh/nvm) is an easy way to install it.
 
 ### 3. Get the code
 
@@ -81,11 +75,13 @@ mkdir -p ~/Development
 git clone <REPO_URL> ~/Development/web-terminal
 cd ~/Development/web-terminal
 npm ci
+npm run build
 ```
 
-`npm ci` installs xterm.js (the terminal display) at the exact versions in `package-lock.json`. The page loads it from the computer, never from the internet.
+- `npm ci` installs xterm.js at the exact versions in `package-lock.json`. The page loads it from the computer, never from the internet.
+- `npm run build` compiles the gatekeeper to `gatekeeper/target/release/gatekeeper`, which the service runs.
 
-If you put the project somewhere else, change the `WorkingDirectory` line in `systemd/web-terminal.service` to match.
+If you put the project somewhere else, change the `WorkingDirectory` and `ExecStart` lines in `systemd/web-terminal.service` to match.
 
 ### 4. Install the Bitwarden Secrets Manager CLI (`bws`)
 
@@ -170,17 +166,14 @@ The log should say `Listening on port 7681, allowing 1 device(s)`.
 
 ## Maintenance
 
-### Updating Node.js
+### Updating the gatekeeper
 
-Install a newer version and point the `default` alias at it. The service uses it after its next restart:
+After pulling changes to `gatekeeper/`, rebuild it and restart the service. Changes to the page (`public/`) need neither, because the gatekeeper reads those files on every request.
 
 ```sh
-nvm install 22          # newest 22.x, picked up automatically
-nvm alias default 24    # or move to a new major version
+npm run build
 systemctl --user restart web-terminal
 ```
-
-The service fails to start only if `default` points to a version that is not installed.
 
 ### Allowing a different iPhone
 
@@ -205,22 +198,29 @@ journalctl --user -u web-terminal-ttyd -f   # ttyd
 
 The tests use only loopback addresses (`127.0.0.1`) and never need your Bitwarden secrets.
 
-### Gatekeeper and key tests
+### Gatekeeper tests
 
 ```sh
-npm test
+npm run test:gatekeeper
 ```
 
-These start real copies of the gatekeeper with a stand-in for ttyd, and connect from two loopback addresses (`127.0.0.1` allowed, `127.0.0.2` not) to play the iPhone and another device. They check that:
+These are written in Rust, in `gatekeeper/tests`. They start real copies of the gatekeeper with a stand-in for ttyd, and connect from two loopback addresses (`127.0.0.1` allowed, `127.0.0.2` not) to play the iPhone and another device. They check that:
 
 - the gatekeeper stops with exit code 78 when a setting is missing or invalid, and listens only on `LISTEN_HOST`;
 - devices that are not allowed are dropped without a reply;
 - requests using another site's name are refused (the defense against DNS rebinding);
 - only the page files are served, each with its exact contents and security headers;
 - the terminal connection carries data both ways, closes on both sides, and forwards only the headers ttyd needs;
+- the browser gets a complete WebSocket handshake it will accept, ttyd's refusals stay refusals, and data sent together with a handshake is not lost;
 - malformed requests, abrupt disconnects and a stopped ttyd never stop the gatekeeper, and connections are limited.
 
-They also check the exact bytes each key bar key sends, including Ctrl with letters from other alphabets, and that the two service files agree with each other and with the gatekeeper: the socket path, the Bitwarden and Node launchers, and the exit code that stops restarts.
+### Key and service tests
+
+```sh
+npm test
+```
+
+These check the exact bytes each key bar key sends, including Ctrl with letters from other alphabets, and that the two service files agree with each other and with the gatekeeper: the socket path, the Bitwarden launcher, the compiled gatekeeper, and the exit code that stops restarts.
 
 ### System tests
 

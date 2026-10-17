@@ -8,10 +8,9 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { chromium, devices } from 'playwright';
-import { THIS_MACHINE, removeTempDirs, startGatekeeper, tempSocketPath } from '../helpers.mjs';
+import { THIS_MACHINE, removeTempDirs, startGatekeeper, tempSocketPath, waitForFile } from '../helpers.mjs';
 
 // One ttyd and gatekeeper per kind of session the tests need.
 const SESSIONS = {
@@ -42,17 +41,6 @@ async function cleanUp() {
     await gatekeeper.stop();
   }
   await removeTempDirs();
-}
-
-async function waitForFile(path) {
-  for (let attempt = 0; attempt < 50; attempt++) {
-    try {
-      return await access(path);
-    } catch {
-      await sleep(100);
-    }
-  }
-  throw new Error(`ttyd did not create ${path}`);
 }
 
 before(async () => {
